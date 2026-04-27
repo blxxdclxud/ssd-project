@@ -36,18 +36,3 @@ Append the contents of `etc_hosts.txt` to your system hosts file:
 ```
 
 Open `http://frontend.local:8080` in your browser.
-
-## Demo modes
-
-All modes are set as environment variables and require a server restart to take effect.
-
-| Variable | Values | Effect |
-|----------|--------|--------|
-| `CORS_ENABLED` | `0` (default), `1` | Enable correct CORS on the API |
-| `CORS_MISCONFIG` | `0` (default), `1` | Enable misconfigured CORS (reflects any origin) |
-| `CSP_MODE` | `0`–`3` | `0`=off, `1`=strict, `2`=nonce-based, `3`=report-only |
-
-Example:
-```bash
-CORS_ENABLED=1 ./run_all.sh
-```
