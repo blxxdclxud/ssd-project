@@ -1,0 +1,7 @@
+{
+  "users": [
+    {"id": 1, "name": "Alice Müller",  "email": "alice@corp.internal", "role": "admin"},
+    {"id": 2, "name": "Bob Smith",     "email": "bob@corp.internal",   "role": "user"},
+    {"id": 3, "name": "Carol Zhang",   "email": "carol@corp.internal", "role": "user"}
+  ]
+}
