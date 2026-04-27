@@ -1,0 +1,7 @@
+# Append these three lines to /etc/hosts
+# Linux/macOS: /etc/hosts
+# Windows:     C:\Windows\System32\drivers\etc\hosts
+
+127.0.0.1  frontend.local
+127.0.0.1  api.local
+127.0.0.1  evil.local
