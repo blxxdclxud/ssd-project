@@ -194,16 +194,33 @@ Test 3 (`connect-src`) fetches `evil.local:8082/evil.js` with `mode: 'no-cors'`.
 ## Setup
 
 ```bash
-# 1. Add hostnames (once, requires root)
+# 1. Add hostnames (once, requires root / Administrator)
+#    Linux/macOS:
 sudo tee -a /etc/hosts < etc_hosts.txt
+#    Windows: edit C:\Windows\System32\drivers\etc\hosts as Administrator
+#    and append the three lines from etc_hosts.txt
 
 # 2. Install dependencies
-pip3 install -r requirements.txt
+pip3 install -r requirements.txt   # Linux/macOS
+# pip install -r requirements.txt  # Windows (inside venv)
+```
 
-# 3. Run
+**Linux / macOS:**
+
+```bash
 ./run_all.sh                     # CORS disabled, CSP mode 0
 CORS_ENABLED=1 ./run_all.sh      # proper CORS
 CORS_MISCONFIG=1 ./run_all.sh    # attack demo mode
+```
+
+**Windows:**
+
+```powershell
+python start.py            # default (CORS disabled, CSP off)
+python start.py cors       # CORS enabled
+python start.py misconfig  # CORS misconfigured (attack demo)
+python start.py csp=1      # CSP mode 1  (use csp=2 or csp=3 for other modes)
+python start.py cors csp=2 # combinations work too
 ```
 
 Open `http://frontend.local:8080` in a browser. Switch CSP mode with `?mode=0|1|2|3` on the `/csp-demo` page.
