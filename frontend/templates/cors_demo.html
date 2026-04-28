@@ -2,11 +2,380 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CORS Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 860px;
+      margin: 40px auto;
+      padding: 0 24px 60px;
+      color: #1a1a1a;
+      background: #fafafa;
+    }
+
+    a.back { color: #555; text-decoration: none; font-size: .9rem; }
+    a.back:hover { color: #1a1a1a; }
+
+    h1 { font-size: 1.8rem; margin: 16px 0 4px; }
+    h2 { font-size: 1.05rem; margin: 0 0 10px; }
+
+    .banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: .9rem;
+      font-weight: 500;
+      margin: 20px 0 32px;
+    }
+    .banner.unknown   { background: #f3f4f6; color: #555; }
+    .banner.disabled  { background: #fee2e2; color: #991b1b; }
+    .banner.enabled   { background: #dcfce7; color: #166534; }
+    .banner.misconfig { background: #fef3c7; color: #92400e; }
+
+    details.explainer {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 4px 24px 20px;
+      margin-bottom: 36px;
+      font-size: .9rem;
+      line-height: 1.65;
+    }
+    details.explainer summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: .95rem;
+      color: #1d4ed8;
+      padding: 16px 0 4px;
+      user-select: none;
+    }
+    details.explainer p { margin: 10px 0 0; }
+    details.explainer code {
+      background: #e2e8f0;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: .85rem;
+    }
+
+    .origin-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: .85rem;
+    }
+    .origin-table th {
+      text-align: left;
+      padding: 6px 10px;
+      background: #e2e8f0;
+    }
+    .origin-table td { padding: 5px 10px; border-bottom: 1px solid #e2e8f0; }
+    .origin-table td code { font-size: .82rem; }
+    .same { color: #15803d; font-weight: 600; }
+    .diff { color: #b91c1c; font-weight: 600; }
+
+    .demo-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 2px 9px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+    .badge-a { background: #e0f2fe; color: #0369a1; }
+    .badge-b { background: #fef9c3; color: #854d0e; }
+    .badge-c { background: #fce7f3; color: #9d174d; }
+
+    .meta {
+      font-size: .88rem;
+      color: #444;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .meta code {
+      background: #f3f4f6;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: .84rem;
+    }
+
+    button {
+      padding: 7px 20px;
+      font-size: .9rem;
+      border: none;
+      border-radius: 6px;
+      background: #1d4ed8;
+      color: #fff;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    button:hover { background: #1e40af; }
+    button:disabled { background: #93c5fd; cursor: default; }
+
+    .result {
+      display: none;
+      margin-top: 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #cbd5e1;
+      border-radius: 0 6px 6px 0;
+      padding: 14px 16px;
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: .82rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .result.visible { display: block; }
+    .result.success { border-left-color: #22c55e; }
+    .result.error   { border-left-color: #ef4444; }
+
+    .hint {
+      font-size: .8rem;
+      color: #6b7280;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
-  <h1>CORS Demo</h1>
-  <p>Implementation in progress.</p>
-  <a href="/">← Back</a>
+
+  <a class="back" href="/">&#8592; Back</a>
+  <h1>Cross-Origin Resource Sharing (CORS)</h1>
+
+  <div id="banner" class="banner unknown">Checking API CORS mode...</div>
+
+  <details class="explainer" open>
+    <summary>Background - Same-Origin Policy &amp; how CORS relaxes it</summary>
+
+    <p>
+      Browsers enforce the <strong>Same-Origin Policy (SOP)</strong>: a script may freely
+      read responses only from its own <em>origin</em>. An origin is the triplet
+      <strong>scheme + host + port</strong> - all three must match exactly.
+    </p>
+
+    <table class="origin-table">
+      <tr>
+        <th>URL</th>
+        <th>Same origin as <code>http://frontend.local:8080</code>?</th>
+        <th>Reason</th>
+      </tr>
+      <tr>
+        <td><code>http://frontend.local:8080/other-page</code></td>
+        <td class="same">Yes</td>
+        <td>scheme, host and port are identical</td>
+      </tr>
+      <tr>
+        <td><code>http://api.local:8081/api/data</code></td>
+        <td class="diff">No</td>
+        <td>different host (<code>api.local</code>) and port (<code>8081</code>)</td>
+      </tr>
+      <tr>
+        <td><code>http://evil.local:8082/</code></td>
+        <td class="diff">No</td>
+        <td>different host and port</td>
+      </tr>
+      <tr>
+        <td><code>https://frontend.local:8080/</code></td>
+        <td class="diff">No</td>
+        <td>different scheme (<code>https</code> vs <code>http</code>)</td>
+      </tr>
+    </table>
+
+    <p>
+      Without SOP any website you visit could silently read your emails, bank balance,
+      or session tokens from other open tabs. <strong>CORS is a controlled relaxation</strong>:
+      the <em>server</em> opts in by returning <code>Access-Control-Allow-Origin</code>
+      in its response headers. If those headers are absent the browser blocks JavaScript
+      from reading the response, even when the HTTP request itself already reached
+      the server.
+    </p>
+
+    <p>
+      <strong>Simple vs non-simple requests.</strong>
+      A plain GET or a POST with a basic content type is <em>simple</em> - the browser
+      sends it directly and then checks the response headers. Any request with a
+      non-trivial method or content type (e.g. <code>Content-Type: application/json</code>)
+      is <em>non-simple</em> and triggers a <em>preflight</em>: the browser automatically
+      sends an <code>OPTIONS</code> request first. Only if the server explicitly approves
+      that preflight does the browser send the actual request. A missing CORS configuration
+      therefore prevents the real non-simple request from ever leaving the browser.
+    </p>
+  </details>
+
+  <!-- Section A -->
+  <div class="demo-card">
+    <span class="badge badge-a">Section A - Same-origin</span>
+    <h2>Same-origin GET - baseline (always succeeds)</h2>
+    <p class="meta">
+      Fetches <code>http://frontend.local:8080/</code>, the same origin as this page.
+      SOP does not apply; the browser reads the response without any CORS negotiation.
+    </p>
+    <button onclick="runA(this)">Run</button>
+    <pre id="result-a" class="result"></pre>
+  </div>
+
+  <!-- Section B -->
+  <div class="demo-card">
+    <span class="badge badge-b">Section B - Cross-origin simple request</span>
+    <h2>Cross-origin GET - request sent, response blocked</h2>
+    <p class="meta">
+      Fetches <code>http://api.local:8081/api/data</code>. This is a <em>simple</em>
+      request: the browser sends it without a preflight. The request
+      <strong>does reach the API server</strong>, but if the response contains no
+      <code>Access-Control-Allow-Origin</code> header the browser discards it before
+      JavaScript can read anything.
+    </p>
+    <button onclick="runB(this)">Run</button>
+    <pre id="result-b" class="result"></pre>
+    <p class="hint">DevTools -&gt; Console (F12): full browser CORS policy error visible there.</p>
+  </div>
+
+  <!-- Section C -->
+  <div class="demo-card">
+    <span class="badge badge-c">Section C - Cross-origin non-simple request</span>
+    <h2>Cross-origin POST with JSON - preflight blocked, request never sent</h2>
+    <p class="meta">
+      POSTs <code>application/json</code> to <code>http://api.local:8081/api/submit</code>.
+      Because the content type is non-trivial the browser first sends a preflight
+      <code>OPTIONS</code>. If the preflight is rejected the
+      <strong>actual POST is never transmitted</strong> - unlike Section B, the server
+      receives nothing at all.
+    </p>
+    <button onclick="runC(this)">Run</button>
+    <pre id="result-c" class="result"></pre>
+    <p class="hint">DevTools -&gt; Network (F12): OPTIONS preflight present, POST absent when blocked.</p>
+  </div>
+
+  <script>
+    const API  = 'http://api.local:8081';
+    const SELF = 'http://frontend.local:8080';
+
+    // CORS mode banner
+    (async () => {
+      const el = document.getElementById('banner');
+      try {
+        const { cors } = await fetch(`${API}/api/cors-config`).then(r => r.json());
+        const states = {
+          disabled:  ['disabled',  'CORS disabled - cross-origin requests will be blocked by the browser'],
+          enabled:   ['enabled',   'CORS enabled - api.local accepts requests from frontend.local'],
+          misconfig: ['misconfig', 'CORS misconfigured - api.local reflects any origin (attack demo mode)'],
+        };
+        const [cls, text] = states[cors] ?? ['unknown', `cors: ${cors}`];
+        el.className = `banner ${cls}`;
+        el.textContent = text;
+      } catch {
+        // The cors-config fetch is itself cross-origin, so it will be blocked
+        // when CORS is disabled - a live demonstration of SOP in action.
+        el.className = 'banner disabled';
+        el.textContent = 'CORS disabled - even this status fetch was blocked (see DevTools Console)';
+      }
+    })();
+
+    // Shared display helper
+    function show(id, success, text) {
+      const el = document.getElementById(id);
+      el.className = `result visible ${success ? 'success' : 'error'}`;
+      el.textContent = text;
+    }
+
+    // Section A
+    async function runA(btn) {
+      btn.disabled = true;
+      try {
+        const r = await fetch(`${SELF}/`);
+        show('result-a', true,
+          '[OK]\n' +
+          `  URL    : ${SELF}/\n` +
+          `  Method : GET\n` +
+          `  Status : ${r.status} ${r.statusText}\n` +
+          '  SOP    : not involved - same-origin requests bypass the policy entirely'
+        );
+      } catch (e) {
+        show('result-a', false, `[ERROR] Unexpected error\n  ${e.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Section B
+    async function runB(btn) {
+      btn.disabled = true;
+      const url = `${API}/api/data`;
+      try {
+        const r    = await fetch(url);
+        const body = await r.json();
+        show('result-b', true,
+          '[OK] CORS is enabled\n' +
+          `  URL    : ${url}\n` +
+          `  Status : ${r.status} ${r.statusText}\n` +
+          `  Body   : ${JSON.stringify(body, null, 2)}`
+        );
+      } catch (e) {
+        show('result-b', false,
+          '[BLOCKED] SOP enforcement\n' +
+          `  URL      : ${url}\n` +
+          '  Method   : GET  (simple request, sent without preflight)\n' +
+          `  JS error : ${e.message}\n\n` +
+          '  The GET request did reach the API server.\n' +
+          '  The server replied, but the response contained no\n' +
+          '  Access-Control-Allow-Origin header. The browser\n' +
+          '  discarded the response before JavaScript could read it.\n\n' +
+          '  Full CORS error message: DevTools Console'
+        );
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Section C
+    async function runC(btn) {
+      btn.disabled = true;
+      const url = `${API}/api/submit`;
+      try {
+        const r    = await fetch(url, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ demo: true, section: 'C' }),
+        });
+        const body = await r.json();
+        show('result-c', true,
+          '[OK] CORS is enabled\n' +
+          `  URL    : ${url}\n` +
+          '  Method : POST  (Content-Type: application/json)\n' +
+          `  Status : ${r.status} ${r.statusText}\n` +
+          `  Body   : ${JSON.stringify(body, null, 2)}`
+        );
+      } catch (e) {
+        show('result-c', false,
+          '[BLOCKED] Preflight rejected - actual POST was never sent\n' +
+          `  URL      : ${url}\n` +
+          '  Method   : POST  (Content-Type: application/json, non-simple)\n' +
+          `  JS error : ${e.message}\n\n` +
+          `  The browser sent OPTIONS ${url} first.\n` +
+          '  The server returned no CORS headers on the preflight,\n' +
+          '  so the browser rejected it. The POST body was never\n' +
+          '  transmitted - the server received nothing at all.\n\n' +
+          '  DevTools Network: OPTIONS request present, POST absent'
+        );
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+
 </body>
 </html>
