@@ -2,11 +2,203 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CSP Demo</title>
+  <link rel="stylesheet" href="/static/csp_demo.css?v=2">
 </head>
 <body>
-  <h1>CSP Demo</h1>
-  <p>Implementation in progress.</p>
-  <a href="/">← Back</a>
+
+  <a class="back" href="/">&#8592; Back</a>
+  <h1>Content Security Policy (CSP)</h1>
+
+  {% set mode_titles = {
+      '0': 'Mode 0 - no CSP (everything allowed)',
+      '1': 'Mode 1 - strict default-src \'self\'',
+      '2': 'Mode 2 - nonce-based script-src',
+      '3': 'Mode 3 - report-only (\'self\')'
+  } %}
+  <div class="banner mode-{{ mode }}">{{ mode_titles[mode] }}</div>
+
+  <nav class="mode-switch">
+    <a href="?mode=0" class="{% if mode == '0' %}active{% endif %}">
+      0 - none<small>baseline (dangerous)</small>
+    </a>
+    <a href="?mode=1" class="{% if mode == '1' %}active{% endif %}">
+      1 - strict<small>default-src 'self'</small>
+    </a>
+    <a href="?mode=2" class="{% if mode == '2' %}active{% endif %}">
+      2 - nonce<small>only nonced inline scripts</small>
+    </a>
+    <a href="?mode=3" class="{% if mode == '3' %}active{% endif %}">
+      3 - report-only<small>same as mode 1, but allow + report</small>
+    </a>
+  </nav>
+
+  <div class="header-box">
+    {% if csp_header_name %}
+      Response header sent by the server:<br>
+      <span class="hname">{{ csp_header_name }}:</span>
+      <code>{{ csp_header_value }}</code>
+      {% if mode == '2' %}
+        <br><br>
+        Per-request nonce injected into the template:
+        <span class="nonce-pill">{{ nonce }}</span>
+      {% endif %}
+    {% else %}
+      No CSP response header is being sent. The browser applies its default
+      (permissive) policy: inline scripts run, cross-origin resources load,
+      arbitrary fetches are permitted (subject to CORS for reading responses).
+    {% endif %}
+  </div>
+
+  <details class="explainer">
+    <summary>Background - what CSP does and how it differs from CORS</summary>
+    <p>
+      <strong>CSP</strong> is an instruction the server gives the browser:
+      "for this document, only execute scripts / load images / connect to
+      origins that match this allowlist". It is enforced entirely on the
+      client - if the browser cooperates, even an attacker who succeeded
+      in injecting markup into the page is stopped from running their
+      payload.
+    </p>
+    <p>
+      <strong>CSP vs CORS - they are independent.</strong>
+    </p>
+    <ul>
+      <li><strong>CORS</strong> governs whether <em>JavaScript on the page</em>
+        is allowed to <em>read</em> a cross-origin response. The request still
+        leaves the browser; the server decides via response headers.</li>
+      <li><strong>CSP</strong> governs whether the browser is allowed to
+        <em>send the request / execute the resource</em> at all, based on the
+        policy of the <em>page that issued it</em>. CSP runs <em>before</em>
+        CORS - if CSP blocks, CORS never even comes into the picture.</li>
+    </ul>
+    <p>
+      In the four modes below, the API and evil servers are unchanged - the
+      only thing that changes is the policy this page itself declares.
+    </p>
+  </details>
+
+  <div class="demo-card static-list">
+    <span class="badge badge-static">Static - inline script execution</span>
+    <h2>Did inline &lt;script&gt; blocks execute when the page loaded?</h2>
+    <p class="meta">
+      The server emitted three scripts as part of the HTML: a plain inline
+      block, an inline block carrying <code>nonce="{{ nonce[:8] }}..."</code>,
+      and the external controller at <code>/static/csp_demo.js</code>. Their
+      fates depend on the active CSP mode.
+    </p>
+
+    <script>
+      window.__inlineRan = true;
+    </script>
+
+    <script nonce="{{ nonce }}">
+      window.__nonceRan = true;
+    </script>
+
+    <script src="/static/csp_demo.js?v=2" nonce="{{ nonce }}"></script>
+
+    <div id="inline-status"     class="status">checking inline script...</div>
+    <div id="nonce-status"      class="status">checking nonced inline script...</div>
+    <div id="controller-status" class="status">checking controller script...</div>
+
+    <p class="hint">
+      Mode 0: all three run. Mode 1: only the controller runs (it is
+      same-origin). Mode 2: only the nonced inline + the nonced controller
+      run. Mode 3: all three run, and the violations of the report-only
+      policy appear in the log at the bottom.
+    </p>
+  </div>
+
+  <div class="demo-card">
+    <span class="badge badge-script">Test 1 - script-src</span>
+    <h2>Load &lt;script src="http://evil.local:8082/evil.js"&gt;</h2>
+    <p class="meta">
+      Simulates an attacker-supplied script being injected into the page
+      (e.g. via a vulnerable third-party widget). With no CSP, the browser
+      happily fetches and executes it. With <code>default-src 'self'</code>
+      or <code>script-src 'nonce-...'</code>, the browser refuses to even
+      transmit the request.
+    </p>
+    <button id="btn-external-script">Run</button>
+    <pre id="external-script-result" class="result"></pre>
+    <div id="external-script-slot" hidden>
+      <span id="csp-external-script-result"></span>
+    </div>
+  </div>
+
+  <div class="demo-card">
+    <span class="badge badge-img">Test 2 - img-src</span>
+    <h2>Load &lt;img src="http://evil.local:8082/pixel.png"&gt;</h2>
+    <p class="meta">
+      Tracking pixels are the simplest exfiltration vector: a <code>GET</code>
+      request to an attacker origin leaks the visit (and arbitrary data
+      encoded into the URL). <code>img-src</code> falls back to
+      <code>default-src 'self'</code> in modes 1, 2 and 3, so the image
+      is rejected.
+    </p>
+    <button id="btn-image">Run</button>
+    <pre id="image-result" class="result"></pre>
+    <div id="image-slot"></div>
+  </div>
+
+  <div class="demo-card">
+    <span class="badge badge-fetch">Test 3 - connect-src</span>
+    <h2>fetch("http://evil.local:8082/evil.js")</h2>
+    <p class="meta">
+      Demonstrates <code>connect-src</code>, which controls
+      <code>fetch</code>, <code>XHR</code>, <code>WebSocket</code>,
+      <code>EventSource</code> and the Beacon API. Note this is independent
+      of CORS: even <code>mode: 'no-cors'</code> (which the browser would
+      otherwise allow) is refused, because CSP is checked
+      <em>before</em> the request leaves the browser.
+    </p>
+    <button id="btn-fetch">Run</button>
+    <pre id="fetch-result" class="result"></pre>
+  </div>
+
+  <div class="demo-card">
+    <span class="badge badge-xss">Test 4 - inline handlers / DOM XSS</span>
+    <h2>innerHTML = '&lt;img src=x onerror="..."&gt;'</h2>
+    <p class="meta">
+      Simulates a stored / reflected XSS payload reaching the DOM. CSP
+      without <code>'unsafe-inline'</code> in <code>script-src</code> blocks
+      every inline event handler (<code>onerror</code>, <code>onload</code>,
+      <code>onclick</code>, ...) regardless of how the markup got there.
+      This is the single biggest reason CSP exists.
+    </p>
+    <button id="btn-xss">Run</button>
+    <pre id="xss-result" class="result"></pre>
+    <div id="xss-slot" hidden></div>
+  </div>
+
+  {% if mode == '3' %}
+  <div class="demo-card">
+    <span class="badge badge-report">Report-only</span>
+    <h2>Violation log <span class="report-count-label">(<span id="report-count">0</span> reports)</span></h2>
+    <p class="meta">
+      Mode 3 sends <code>Content-Security-Policy-Report-Only</code> with a
+      <code>report-uri /csp-report</code>. Violations are <strong>not
+      blocked</strong>; the browser lets them happen and POSTs a JSON
+      report to the server. This is the canonical way to roll out CSP
+      gradually: ship the policy in report-only first, watch what breaks,
+      tighten the allowlist, then switch to the enforcing header.
+    </p>
+    <div class="report-meta">
+      <button id="btn-refresh-reports">Refresh now</button>
+      <button id="btn-clear-reports" class="secondary">Clear log</button>
+      <span class="muted">(auto-refreshes every 3 s)</span>
+    </div>
+    <pre id="report-log">loading...</pre>
+    <p class="hint">
+      Trigger a few of the tests above, then watch the log fill up. Each
+      entry contains <code>document-uri</code>, <code>violated-directive</code>
+      and <code>blocked-uri</code> - exactly what an SRE needs to triage
+      a real-world CSP rollout.
+    </p>
+  </div>
+  {% endif %}
+
 </body>
 </html>
