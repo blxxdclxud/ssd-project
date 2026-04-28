@@ -1,4 +1,3 @@
-import json
 import os
 import secrets
 
@@ -7,20 +6,22 @@ from flask import Flask, jsonify, render_template, request
 app = Flask(__name__)
 
 CSP_MODE_DEFAULT = os.environ.get("CSP_MODE", "0")
+VALID_MODES      = {"0", "1", "2", "3"}
 
 _csp_report_log = []
 
 
-def _build_csp_header(mode, nonce=None):
-    """Return the Content-Security-Policy header value for the given mode, or
-    None when CSP is off. The nonce parameter is required for mode 2."""
+def _csp_header_for(mode, nonce):
     if mode == "1":
-        return "default-src 'self'"
+        return "Content-Security-Policy", "default-src 'self'"
     if mode == "2":
-        return f"default-src 'self'; script-src 'nonce-{nonce}'"
+        return "Content-Security-Policy", f"default-src 'self'; script-src 'nonce-{nonce}'"
     if mode == "3":
-        return None 
-    return None
+        return (
+            "Content-Security-Policy-Report-Only",
+            "default-src 'self'; report-uri /csp-report",
+        )
+    return None, None
 
 
 @app.route("/")
@@ -35,27 +36,24 @@ def cors_demo():
 
 @app.route("/csp-demo")
 def csp_demo():
-    mode  = request.args.get("mode", CSP_MODE_DEFAULT)
+    mode = request.args.get("mode", CSP_MODE_DEFAULT)
+    if mode not in VALID_MODES:
+        mode = "0"
     nonce = secrets.token_urlsafe(16)
 
-    resp = render_template("csp_demo.html", mode=mode, nonce=nonce)
+    header_name, header_value = _csp_header_for(mode, nonce)
 
-    csp_value = _build_csp_header(mode, nonce)
-    if mode == "3":
-        report_only = (
-            "default-src 'self'; "
-            "report-uri /csp-report"
-        )
-        response = app.make_response(resp)
-        response.headers["Content-Security-Policy-Report-Only"] = report_only
-        return response
-
-    if csp_value:
-        response = app.make_response(resp)
-        response.headers["Content-Security-Policy"] = csp_value
-        return response
-
-    return resp
+    body = render_template(
+        "csp_demo.html",
+        mode=mode,
+        nonce=nonce,
+        csp_header_name=header_name,
+        csp_header_value=header_value,
+    )
+    response = app.make_response(body)
+    if header_name:
+        response.headers[header_name] = header_value
+    return response
 
 
 @app.route("/csp-report", methods=["POST"])
@@ -68,6 +66,12 @@ def csp_report():
 @app.route("/csp-report/log")
 def csp_report_log():
     return jsonify(_csp_report_log)
+
+
+@app.route("/csp-report/clear", methods=["POST"])
+def csp_report_clear():
+    _csp_report_log.clear()
+    return "", 204
 
 
 if __name__ == "__main__":
